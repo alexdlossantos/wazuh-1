@@ -36,7 +36,10 @@ void OS_CreateEventList(int maxsize)
 /* Get the last event -- or first node */
 EventNode *OS_GetLastEvent()
 {
-    EventNode *eventnode_pt = eventnode;
+    EventNode *eventnode_pt;
+    w_mutex_lock(&event_mutex);
+    eventnode_pt = eventnode;
+    w_mutex_unlock(&event_mutex);
 
     return (eventnode_pt);
 }
