@@ -210,6 +210,8 @@ int Start_win32_Syscheck()
     sleep(syscheck.tsleep * 5);
     fim_initialize();
 
+    create_db();
+
     /* Wait if agent started properly */
     os_wait();
 
