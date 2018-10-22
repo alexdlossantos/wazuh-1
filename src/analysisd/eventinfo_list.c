@@ -55,6 +55,7 @@ void OS_AddEvent(Eventinfo *lf, EventList *list)
         list->_memoryused++;
 
         /* Need to remove the last nodes */
+        minfo("~~~~~Eventinfolist: %d / %d", list->_memoryused, list->_memorymaxsize);
         if (list->_memoryused > list->_memorymaxsize) {
             int i = 0;
             EventNode *oldlast;
@@ -70,12 +71,14 @@ void OS_AddEvent(Eventinfo *lf, EventList *list)
                 list->last_node->next = NULL;
 
                 /* Free event info */
+                minfo("~~~~~Removing: %p", oldlast->event);
                 Free_Eventinfo(oldlast->event);
                 free(oldlast);
 
                 list->_memoryused--;
                 i++;
             }
+            minfo("~~~~~END Eventinfolist: %d / %d", list->_memoryused, list->_memorymaxsize);
         }
     } else {
         // Add the first and second node

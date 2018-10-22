@@ -33,10 +33,9 @@ Eventinfo *Search_LastSids(Eventinfo *my_lf, RuleInfo *rule, __attribute__((unus
     Eventinfo *lf = NULL;
     Eventinfo *first_lf;
     OSListNode *lf_node;
+    char list_lock = 0;
 
     w_mutex_lock(&rule->mutex);
-    /* Set frequency to 0 */
-    rule->frequency_count = 0;
 
     /* Checking if sid search is valid */
     if (!rule->sid_search) {
@@ -44,6 +43,12 @@ Eventinfo *Search_LastSids(Eventinfo *my_lf, RuleInfo *rule, __attribute__((unus
         lf = NULL;
         goto end;
     }
+
+    w_mutex_lock(&rule->sid_search->mutex);
+    list_lock = 1;
+
+    /* Set frequency to 0 */
+    rule->frequency_count = 0;
 
     /* Get last node */
     lf_node = OSList_GetLastNode(rule->sid_search);
@@ -180,12 +185,16 @@ Eventinfo *Search_LastSids(Eventinfo *my_lf, RuleInfo *rule, __attribute__((unus
         my_lf->matched = rule->level;
         lf->matched = rule->level;
         first_lf->matched = rule->level;
+        w_mutex_unlock(&rule->sid_search->mutex);
         w_mutex_unlock(&rule->mutex);
         return lf;
 
     } while ((lf_node = lf_node->prev) != NULL);
 
 end:
+    if (list_lock) {
+        w_mutex_unlock(&rule->sid_search->mutex);
+    }
     w_mutex_unlock(&rule->mutex);
     return NULL;
 }
@@ -209,7 +218,7 @@ Eventinfo *Search_LastGroups(Eventinfo *my_lf, RuleInfo *rule, __attribute__((un
     }
 
     /* Get last node */
-    w_mutex_lock(&eventinfo_mutex);
+    w_mutex_lock(&eventinfo_mutex); // ~~~~~~~
     lf_node = OSList_GetLastNode_group(rule->group_search);
 
     if (!lf_node) {
@@ -217,6 +226,7 @@ Eventinfo *Search_LastGroups(Eventinfo *my_lf, RuleInfo *rule, __attribute__((un
         w_mutex_unlock(&eventinfo_mutex);
         goto end;
     }
+
     do {
         lf = (Eventinfo *)lf_node->data;
 
@@ -633,14 +643,32 @@ void Free_Eventinfo(Eventinfo *lf)
         w_mutex_unlock(&prev->mutex);
     }
 
-    if (lf->comment)
-        free(lf->comment);
+    // Free node to delete
+    if(!lf->is_a_copy){
+        if (lf->sid_node_to_delete) {
+            w_mutex_lock(&lf->generated_rule->mutex);
+            OSList_DeleteThisNode(lf->generated_rule->sid_prev_matched,
+                                    lf->sid_node_to_delete);
+            w_mutex_unlock(&lf->generated_rule->mutex);
+        } else if (lf->generated_rule && lf->generated_rule->group_prev_matched) {
+            unsigned int i = 0;
+            w_mutex_lock(&lf->generated_rule->mutex);
+            while (i < lf->generated_rule->group_prev_matched_sz) {
+                OSList_DeleteOldestNode(lf->generated_rule->group_prev_matched[i]);
+                i++;
+            }
+            w_mutex_unlock(&lf->generated_rule->mutex);
+        }
+    }
 
-    if (lf->full_log) {
+    if (lf->comment)
+        free(lf->comment); // ~~~~~~~~~~~
+
+    if (lf->full_log) { // ~~~~~~~~~
         free(lf->full_log);
     }
 
-    if (lf->agent_id) {
+    if (lf->agent_id) { // ~~~~~~~~~
         free(lf->agent_id);
     }
 
@@ -832,25 +860,6 @@ void Free_Eventinfo(Eventinfo *lf)
                 lasts++;
             }
             free(last_event);
-        }
-    }
-
-
-    // Free node to delete
-    if(!lf->is_a_copy){
-        if (lf->sid_node_to_delete) {
-            w_mutex_lock(&lf->generated_rule->mutex);
-            OSList_DeleteThisNode(lf->generated_rule->sid_prev_matched,
-                                    lf->sid_node_to_delete);
-            w_mutex_unlock(&lf->generated_rule->mutex);
-        } else if (lf->generated_rule && lf->generated_rule->group_prev_matched) {
-            unsigned int i = 0;
-            w_mutex_lock(&lf->generated_rule->mutex);
-            while (i < lf->generated_rule->group_prev_matched_sz) {
-                OSList_DeleteOldestNode(lf->generated_rule->group_prev_matched[i]);
-                i++;
-            }
-            w_mutex_unlock(&lf->generated_rule->mutex);
         }
     }
 

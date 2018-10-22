@@ -2108,8 +2108,7 @@ void * w_process_event_thread(__attribute__((unused)) void * id){
         do {
             if (lf->decoder_info->type == OSSEC_ALERT) {
                 if (!lf->generated_rule) {
-                    w_free_event_info(lf);
-                    continue;
+                    goto next_it;
                 }
 
                 /* Process the alert */
@@ -2225,7 +2224,6 @@ void * w_process_event_thread(__attribute__((unused)) void * id){
                 } else {
                     lf->sid_node_to_delete = node;
                 }
-                lf->queue_added = 1;
                 w_mutex_unlock(&t_currently_rule->mutex);
             }
             /* Group list */
@@ -2241,13 +2239,11 @@ void * w_process_event_thread(__attribute__((unused)) void * id){
                     }
                     j++;
                 }
-                lf->queue_added = 1;
                 w_mutex_unlock(&t_currently_rule->mutex);
             }
 
-            os_calloc(1, sizeof(Eventinfo), lf_cpy);
-            w_copy_event_for_log(lf,lf_cpy);
-            OS_AddEvent(lf_cpy, last_events_list);
+            lf->queue_added = 1;
+            OS_AddEvent(lf, last_events_list);
             break;
 
         } while ((rulenode_pt = rulenode_pt->next) != NULL);
@@ -2256,17 +2252,19 @@ void * w_process_event_thread(__attribute__((unused)) void * id){
 
         if (Config.logall || Config.logall_json){
 
-            result = queue_push_ex(writer_queue, lf);
+            os_calloc(1, sizeof(Eventinfo), lf_cpy);
+            w_copy_event_for_log(lf, lf_cpy);
+            result = queue_push_ex(writer_queue, lf_cpy);
 
             if (result < 0) {
                 if(!reported_writer){
                     reported_writer = 1;
                     mwarn("Archive writer queue is full. %d", t_id);
                 }
-                w_free_event_info(lf);
+                w_free_event_info(lf_cpy);
             }
-            continue;
         }
+next_it:
 
         w_free_event_info(lf);
     }
